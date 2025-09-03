@@ -20,6 +20,16 @@ Tested on HomeAssistant 2023.7.2.
 
 ## Usage
 
+### Command-line Options
+
+- `--search <regex>`: Regular expression for searching entity IDs.
+- `--replace <regex>`: Regular expression for replacing in entity IDs. Requires `--search`.
+- `--input-file <path>`: Input CSV file containing Friendly Name, Current Entity ID, and New Entity ID.
+- `--output-file <path>`: Output CSV file to export the results.
+- `-y`, `--yes`: Skip confirmation prompt and proceed non-interactively. **Intended for automated scripts and Docker runs.**
+  
+### Typical Workflow
+
 1. Install the required packages by running the following command:
    ```
    pip install -r requirements.txt
@@ -33,15 +43,41 @@ Tested on HomeAssistant 2023.7.2.
    ./homeassistant-entity-renamer.py --search <search_regex> --replace <replace_regex>
    ```
 
-   Replace `<search_regex>` with the regular expression that matches the entities you want to rename. Replace `<replace_regex>` with the regular expression used to rename the entities. Note that you can use all the regex magic that Python's `re.sub()` function allows.
+   Replace `<search_regex>` with the regular expression that matches the entities you want to rename. Replace `<replace_regex>` with the regular expression used to rename the entities. Note that you can use all the regex capabilities provided by Python's `re.sub()` function.
 
-4. Check the output and confirm the renaming process if desired.
+4. The script will display a table of entities and, by default, ask for confirmation before renaming unless you specify `--yes` or `-y` to skip the prompt and proceed non-interactively.
 
-## Usage (with docker)
+## Usage (with Docker)
+
+> **Important: Skipping Confirmation in Non-Interactive Environments**
+>
+> By default, the script prompts for confirmation before changing entities. If you run this script in Docker **without** allocating an interactive terminal (i.e., without `-it`) and **without** `--yes`/`-y`, you will get an `EOFError` at the prompt.
+> Use `--yes` (or `-y`) to proceed non-interactively and suppress the confirmation prompt in Docker/automation.
 
 1. Rename `config.py.example` to `config.py` and modify the configuration variables according to your HomeAssistant setup.
 2. `docker build -t homeassistant-renamer .`
-3. `docker run homeassistant-renamer --search sensor`
+3. **Non-interactive safe execution:**
+   ```sh
+   docker run homeassistant-renamer --search sensor --yes
+   ```
+   Alternatively, short form:
+   ```sh
+   docker run homeassistant-renamer --search sensor -y
+   ```
+
+> **Warning:**
+> When using the `--output-file` option with Docker, the file path must point to a directory that is mapped to your host using Docker's `-v` (volume) flag, otherwise the output file will not be accessible from your computer.
+
+**Example:**
+To make the output file accessible on your host, map a local directory (e.g., `$(pwd)/output`) to a container directory (e.g., `/data`):
+
+```sh
+docker run -v $(pwd)/output:/data homeassistant-renamer --search sensor --output-file /data/results.csv --yes
+```
+
+After the command completes, the file `results.csv` will appear in your local `output` directory.
+
+If you do *not* use a volume mapping, any output file written within the container will only be accessible inside the container, and will not persist or be reachable from your host system.
 
 ## Examples
 
@@ -87,8 +123,55 @@ Entity 'input_text.interesting_testtext_1' renamed to 'input_text.just_another_t
 
 ```
 
+## Advanced Regex Usage: Capture Groups and Replacement Pitfalls
+
+### Using Capture Groups in `--search` and `--replace`
+
+This script's `--search` and `--replace` options support Python regular expressions, including capture groups, exactly as in [`re.sub()`](https://docs.python.org/3/library/re.html#re.sub). Capture groups—expressions wrapped in parentheses—allow you to reference parts of the matched text when rewriting entity IDs.
+
+**Syntax Recap:**
+- In `--search`, define your capture groups with parentheses: e.g. `garage_powerstrip_(.*)1`
+- In `--replace`, refer to each capture group by `\1`, `\2`, etc. (or `\\1` as needed for your shell/environment)
+
+### Canonical Example: Inserting a Space
+
+**Goal:** Convert all entity IDs like `garage_powerstrip_x1` to `garage_powerstrip_x 1` (insert a space before the final `1`).
+
+**Command:**
+```bash
+./homeassistant-entity-renamer.py --search "garage_powerstrip_(.*)1" --replace "garage_powerstrip_\\1 1"
+```
+- In the search: `garage_powerstrip_(.*)1` matches anything after the underscore up to the trailing `1`, capturing it as group 1.
+- In the replace: `garage_powerstrip_\\1 1` reconstructs the string, inserting a space before the final 1, with `\\1` referencing the captured group.
+
+> **Why `\\1` and Not Just `\1`?**
+>
+> In a Python string, `\1` references the first capture group. However, in most Unix shells (including Bash), a single backslash is consumed by the shell before Python ever sees it. To ensure Python receives `\1`, you must escape the backslash: use `\\1` on the command line. Otherwise, your replacement might not use the intended group—or may fail entirely.
+>
+> **Example evolution:**
+> - In Python code: `re.sub(r"garage_powerstrip_(.*)1", r"garage_powerstrip_\1 1", ...)`
+> - In Bash CLI: `--replace "garage_powerstrip_\\1 1"` (**double backslash!**)
+>
+> On Windows (especially Command Prompt), a single backslash might work, but double-backslash is always safe and recommended for cross-platform compatibility.
+
+### Quoting and Backslash Pitfalls
+
+- **Always quote** regex strings to avoid shell interpretation of spaces or special characters, e.g. use `"pattern"` not only `pattern`.
+- **Whitespace matters**: accidental spaces in your regex or replacement may change the output.
+- On UNIX/Bash, **backslashes must be doubled** (i.e. `\\1`) for the replacement to work as intended. On Windows Command Prompt, `\1` may work, but `\\1` is safer.
+- The same escaping rules apply in Docker: `--replace "garage_powerstrip_\\1 1"`.
+
+### Common Issues and Troubleshooting
+
+- If you see the literal string `\1` in your replacement output, you may have under-escaped your backslash and the shell stripped it before Python.
+- If you see errors or nothing is replaced, check for extra spaces in your pattern, missed quotes, or incorrect backslash count.
+- If in doubt, echo your command and inspect what string is being passed into the script, or put your replacement string in a variable and echo it before running.
+
+**Summary:**
+Always use double backslashes (`\\1`, `\\2`, etc.) for capture groups within `--replace` when running from a command shell, and surround all regex arguments with quotes to preserve spacing and special characters.
+
 ## Acknowledgements
 
-This project was developed in cooperation with ChatGPT, a large language model trained by OpenAI, based on the GPT-3.5 architecture.
+This project was developed in cooperation with ChatGPT, a large language model trained by OpenAI, based on the GPT-3.5 & 4.1 architecture.
 
 Feel free to explore and modify the script to suit your specific needs. If you encounter any issues or have suggestions for improvements, please submit them to the project's issue tracker.
