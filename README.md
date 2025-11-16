@@ -18,6 +18,57 @@ Tested on HomeAssistant 2023.7.2.
 - Python 3.6 or above
 - Packages listed in `requirements.txt`
 
+## Installation & Setup
+
+### Quick Setup (Recommended)
+
+Run the provided setup script to automatically create a virtual environment and install dependencies:
+
+```bash
+./setup.sh
+```
+
+This script will:
+- Create a Python virtual environment in the `venv/` directory
+- Install all required packages from `requirements.txt`
+- Configure the script to run directly without manual environment activation
+
+### Manual Setup
+
+If you prefer manual setup or encounter issues with the quick setup:
+
+1. **Create a virtual environment** (recommended to avoid Python version conflicts):
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Option A - Use with virtual environment activation**:
+   ```bash
+   source venv/bin/activate
+   python homeassistant-entity-renamer.py --search <pattern>
+   ```
+
+4. **Option B - Use the generated wrapper script** (recommended):
+   ```bash
+   ./run.sh --search <pattern>
+   ```
+
+### Python Version Compatibility Notes
+
+This project has been tested with Python 3.14 and uses a virtual environment to ensure dependency compatibility. If you encounter `ModuleNotFoundError` issues:
+
+1. **Check Python version mismatch**: Different `pip` and `python3` versions can cause import errors
+2. **Use virtual environment**: This isolates dependencies and avoids system Python conflicts
+3. **Run the setup script**: `./setup.sh` handles environment setup automatically
+
+The setup script creates a `run.sh` wrapper that automatically activates the virtual environment and runs the script, ensuring consistent dependency resolution across different systems.
+
 ## Usage
 
 ### Command-line Options
@@ -30,22 +81,23 @@ Tested on HomeAssistant 2023.7.2.
   
 ### Typical Workflow
 
-1. Install the required packages by running the following command:
-   ```
-   pip install -r requirements.txt
+1. **Run the setup script** (first time only):
+   ```bash
+   ./setup.sh
    ```
 
-2. Rename `config.py.example` to `config.py` and modify the configuration variables according to your HomeAssistant setup.
+2. **Configure HomeAssistant connection**: Rename `config.py.example` to `config.py` and modify the configuration variables according to your HomeAssistant setup.
 
-3. Run the script with the desired options:
-
-   ```
+3. **Run the script** with the desired options:
+   ```bash
    ./homeassistant-entity-renamer.py --search <search_regex> --replace <replace_regex>
    ```
-
+   
    Replace `<search_regex>` with the regular expression that matches the entities you want to rename. Replace `<replace_regex>` with the regular expression used to rename the entities. Note that you can use all the regex capabilities provided by Python's `re.sub()` function.
 
 4. The script will display a table of entities and, by default, ask for confirmation before renaming unless you specify `--yes` or `-y` to skip the prompt and proceed non-interactively.
+
+> **Note**: After running `./setup.sh` once, the script can be executed directly with `./homeassistant-entity-renamer.py` without needing to activate the virtual environment manually.
 
 ## Usage (with Docker)
 
@@ -169,6 +221,64 @@ This script's `--search` and `--replace` options support Python regular expressi
 
 **Summary:**
 Always use double backslashes (`\\1`, `\\2`, etc.) for capture groups within `--replace` when running from a command shell, and surround all regex arguments with quotes to preserve spacing and special characters.
+
+## Troubleshooting
+
+### Common Issues
+
+#### ModuleNotFoundError: No module named 'requests'
+
+**Problem**: You see an error like:
+```
+ModuleNotFoundError: No module named 'requests'
+```
+
+**Cause**: This typically occurs when:
+- Multiple Python versions are installed (e.g., system Python 3.11 and Homebrew Python 3.14)
+- Packages were installed with a different `pip` than the `python3` interpreter being used
+- The script is trying to use system Python while packages were installed in a user environment
+
+**Solution**:
+1. **Use the setup script** (recommended):
+   ```bash
+   ./setup.sh
+   ```
+
+2. **Or manually create a virtual environment**:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+3. **Run the script**:
+   ```bash
+   ./homeassistant-entity-renamer.py --search <pattern>
+   ```
+
+#### Script won't execute directly
+
+**Problem**: Running `./homeassistant-entity-renamer.py` gives permission denied or interpreter errors.
+
+**Solution**:
+1. Ensure the script is executable:
+   ```bash
+   chmod +x homeassistant-entity-renamer.py
+   ```
+
+2. If you see interpreter errors, the shebang line may need updating. Run the setup script:
+   ```bash
+   ./setup.sh
+   ```
+
+#### Virtual Environment Not Found
+
+**Problem**: The script references a virtual environment that doesn't exist.
+
+**Solution**: Run the setup script to recreate the virtual environment:
+```bash
+./setup.sh
+```
 
 ## Acknowledgements
 
